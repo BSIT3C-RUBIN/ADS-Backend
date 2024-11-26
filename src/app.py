@@ -1,6 +1,7 @@
 from flask import Flask, jsonify, request
 import pymysql.cursors
 import os
+#import bcrypt
 
 app = Flask(__name__)
 
@@ -93,6 +94,74 @@ def get_animal_by_species(species):
 
     finally:
         # Close the database connection
+        connection.close()
+
+# Create animnal information with 'POST' method
+
+@app.route('/api/animals', methods=['POST'])
+def create_animal():
+    """Add a new animal to the database."""
+    # Parse the JSON data from the request
+    data = request.json
+
+    # Validate input data
+    required_fields = [
+        'name', 'species', 'breed', 'age', 'sex', 'characteristics',
+        'health_status', 'arrival_date', 'adoption_status',
+        'special_needs', 'adoption_date', 'birthday', 'notes',
+        'size', 'location_rescued', 'description', 'is_desexed'
+    ]
+
+    # Ensure all required fields are present
+    missing_fields = [field for field in required_fields if field not in data]
+    if missing_fields:
+        return jsonify({"error": f"Missing fields: {', '.join(missing_fields)}"}), 400
+
+    connection = pymysql.connect(
+        host=DB_HOST,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        database=DB_NAME
+    )
+
+    try:
+        with connection.cursor() as cursor:
+            # SQL query to insert a new animal
+            sql = """
+                INSERT INTO animal_information (
+                    name, species, breed, age, sex, characteristics,
+                    health_status, arrival_date, adoption_status,
+                    special_needs, adoption_date, birthday, notes,
+                    size, location_rescued, description, is_desexed
+                )
+                VALUES (
+                    %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s
+                )
+            """
+            cursor.execute(sql, (
+                data['name'], data['species'], data['breed'], data['age'],
+                data['sex'], data['characteristics'], data['health_status'],
+                data['arrival_date'], data['adoption_status'],
+                data['special_needs'], data['adoption_date'], data['birthday'],
+                data['notes'], data['size'], data['location_rescued'],
+                data['description'], data['is_desexed']
+            ))
+
+            # Commit the transaction
+            connection.commit()
+
+            # Return a success response with the newly created animal ID
+            return jsonify({
+                "message": "Animal created successfully",
+                "animal_id": cursor.lastrowid
+            }), 201
+
+    except pymysql.MySQLError as e:
+        return jsonify({"error": str(e)}), 500
+
+    finally:
         connection.close()
 
 
@@ -235,6 +304,58 @@ def get_med_history(vacc_id):
     finally:
         connection.close()
 
+# Create a record
+@app.route('/api/animal_med_history', methods=['POST'])
+def create_animal_med_history():
+    """Add a new medical history record for an animal."""
+    # Parse the JSON data from the request
+    data = request.json
+
+    # Validate input data
+    required_fields = ['vacc_type', 'vacc_date', 'vacc_dose', 'animal_id']
+
+    # Ensure all required fields are present
+    missing_fields = [field for field in required_fields if field not in data]
+    if missing_fields:
+        return jsonify({"error": f"Missing fields: {', '.join(missing_fields)}"}), 400
+
+    connection = pymysql.connect(
+        host=DB_HOST,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        database=DB_NAME
+    )
+
+    try:
+        with connection.cursor() as cursor:
+            # SQL query to insert a new record into the animal_med_history table
+            sql = """
+                INSERT INTO animal_med_history (
+                    vacc_type, vacc_date, vacc_dose, animal_id
+                )
+                VALUES (%s, %s, %s, %s)
+            """
+            cursor.execute(sql, (
+                data['vacc_type'], data['vacc_date'],
+                data['vacc_dose'], data['animal_id']
+            ))
+
+            # Commit the transaction
+            connection.commit()
+
+            # Return a success response with the new record ID
+            return jsonify({
+                "message": "Medical history record created successfully",
+                "med_history_id": cursor.lastrowid
+            }), 201
+
+    except pymysql.MySQLError as e:
+        return jsonify({"error": str(e)}), 500
+
+    finally:
+        connection.close()
+
+
 # Update specific record using vacc_id with 'PUT' method
 
 @app.route('/api/animal_med_history/<int:vacc_id>', methods=['PUT'])
@@ -317,6 +438,39 @@ def delete_med_history(vacc_id):
     finally:
         connection.close()
 
+# Admin api goes here
+
+# @app.route("/api/login", methods=["POST"])
+# def login_admin():
+#     """Try to authenticate admin"""
+#     connection = pymysql.connect(
+#         host=DB_HOST,
+#         user=DB_USER,
+#         password=DB_PASSWORD,
+#         database=DB_NAME,
+#         cursorclass=pymysql.cursors.DictCursor
+
+#     )
+#     data = request.get_json()
+#     try:
+#         with connection.cursor() as cursor:
+#             query = "SELECT * FROM admin WHERE username = %s"
+#             cursor.execute(query, (data['username'],))
+#             if cursor.rowcount == 0:
+#                 return jsonify({'error': 'Username or password incorrect.'}), 401
+
+#             # This is where it goes it username has been found.
+#             admin = cursor.fetchone()
+#             stored_password = admin['password']
+#             try_password = data['password']
+#             if bcrypt.checkpw(try_password.encode('utf-8'), stored_password.encode('utf-8')):
+#                 return jsonify({'message': 'Login successful'}), 200
+#             return jsonify({'error': 'Username or password incorrect.'}), 401
+#     except Exception as e:
+#         return jsonify({'error': str(e)}), 500
+
+#     finally:
+#         connection.close()
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host=HOST, debug=True)
